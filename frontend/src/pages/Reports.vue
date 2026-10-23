@@ -1,0 +1,13 @@
+<script setup>
+import { onMounted, ref } from 'vue'
+import api, { errorText, kyat, localDate } from '../api'
+const from=ref(localDate().slice(0,7)+'-01'),to=ref(localDate()),data=ref(null),error=ref(''),busy=ref(false)
+async function load(){error.value='';busy.value=true;try{data.value=(await api.get('/api/reports',{params:{from:from.value,to:to.value}})).data}catch(e){error.value=errorText(e)}finally{busy.value=false}}
+onMounted(load)
+function csvDownload(){if(!data.value)return;const rows=[['Date','Payments','Revenue (MMK)'],...data.value.daily.map(d=>[d.date,d.payments,d.revenue])];const csv='\uFEFF'+rows.map(r=>r.join(',')).join('\r\n');const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=`cafe-sales-${from.value}-to-${to.value}.csv`;a.click();URL.revokeObjectURL(url)}
+</script>
+<template>
+  <div v-if="error" class="alert alert-danger">{{ error }}</div><div class="panel"><form class="filter-row mb-0" @submit.prevent="load"><div><label class="field-label">From</label><input v-model="from" type="date" class="form-control" required/></div><div><label class="field-label">To</label><input v-model="to" type="date" class="form-control" required/></div><button class="btn btn-primary" :disabled="busy">{{ busy?'Loading…':'Generate report' }}</button><button type="button" class="btn btn-outline-secondary" :disabled="!data" @click="csvDownload">Download CSV</button></form></div>
+  <template v-if="data"><div class="metric-grid"><article class="metric"><span>Paid Revenue</span><strong>{{ kyat(data.revenue) }}</strong></article><article class="metric"><span>Product Cost</span><strong>{{ kyat(data.cost_of_goods) }}</strong></article><article class="metric"><span>Operating Expenses</span><strong>{{ kyat(data.expenses) }}</strong></article><article class="metric"><span>Estimated Profit</span><strong>{{ kyat(data.estimated_profit) }}</strong><small>Revenue − item costs − expenses</small></article></div>
+  <div class="panel"><div class="panel-header"><h3>Daily sales</h3><span class="muted small">{{ data.paid_orders }} paid order(s)</span></div><div class="table-responsive"><table class="table align-middle"><thead><tr><th>Date</th><th>Payments</th><th>Revenue</th></tr></thead><tbody><tr v-for="d in data.daily" :key="d.date"><td>{{ d.date }}</td><td>{{ d.payments }}</td><td><strong>{{ kyat(d.revenue) }}</strong></td></tr><tr v-if="!data.daily.length"><td colspan="3" class="empty-state">No paid sales in this date range.</td></tr></tbody></table></div><p class="inline-note mb-0">Profit is an estimate, not an accounting statement. Refunds, taxes and salary accounting are not implemented.</p></div></template>
+</template>
